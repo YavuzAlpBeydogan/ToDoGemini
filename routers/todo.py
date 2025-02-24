@@ -46,8 +46,6 @@ async def render_todo_page(request:Request, db:db_dependency):
         return templates.TemplateResponse("todo.html",{"request":request, "todos":todos,"user":user})
     except:
         return redirect_to_login()
-
-
 @router.get("/")
 async def read_all(user: user_dependency, db: db_dependency):
     if user is None:
