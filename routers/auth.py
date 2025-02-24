@@ -1,5 +1,5 @@
 from tokenize import Token
-from fastapi import APIRouter , Depends, HTTPException, status
+from fastapi import APIRouter , Depends, HTTPException, status, Request
 from fastapi.security import  OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from pydantic import BaseModel
 from typing import Annotated
@@ -10,10 +10,15 @@ from models import User
 from passlib.context import CryptContext
 from jose import jwt, JWTError
 from datetime import timedelta, datetime, timezone
+from fastapi.templating import Jinja2Templates
 router = APIRouter(
     prefix="/auth",
     tags=["Authentication"]
 )
+
+templates = Jinja2Templates(directory="templates")
+
+
 SECRET_KEY = "acoztm3revp1vfj7ld5sz2ndg5xp79r9fnr2p4hx2dy63h6a8efhj6rm54u8evh8"
 ALGORITHM = "HS256"
 
@@ -68,6 +73,13 @@ async def get_current_user(token:Annotated[str, Depends((oauth2_bearer))]):
         return {'username': username, 'id':user_id, 'user_role':user_role}
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token is invalid")
+
+@router.get("/login-page")
+def render_login_page(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
+@router.get("/register-page")
+def render_register_page(request: Request):
+    return templates.TemplateResponse("register.html", {"request": request})
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
