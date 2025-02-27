@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Path, HTTPException, Request
+from fastapi import APIRouter, Depends, Path, HTTPException, Request, FastAPI
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from starlette import status
@@ -8,6 +8,13 @@ from database import engine, SessionLocal
 from typing import Annotated
 from routers.auth import get_current_user
 from fastapi.templating import Jinja2Templates
+from dotenv import load_dotenv
+import google.generativeai as genai
+import os
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import HumanMessage, AIMessage
+import markdown
+from bs4 import BeautifulSoup
 
 router = APIRouter(
     prefix="/todo",
@@ -20,7 +27,6 @@ class TodoRequest(BaseModel):
     description: str = Field(min_length=3, max_length=1000)
     priority: int = Field(gt=0, lt=6)
     complete: bool
-
 
 def get_db():
     db = SessionLocal()
@@ -36,6 +42,25 @@ def redirect_to_login():
     redirect_response = RedirectResponse(url="/auth/login-page", status_code=status.HTTP_302_FOUND)
     redirect_response.delete_cookie("access_token")
     return redirect_response
+
+def create_todo_with_gemini(todo_string:str):
+    load_dotenv()
+    genai.configure(api_key=os.environ.get('GENAI_API_KEY'))
+    llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro")
+    response= llm.invoke([
+        HumanMessage(content="Sana bir todo list veriyorum bunu todo listeme ekleyeceğim.Senden daha uzun , daha detaylı, kaynakta vererek daha açıklamalı bir yanıt istiyorum.Bir sonraki mesajımda da todoyu söyleyeceğim."),
+        HumanMessage(content=todo_string)
+    ])
+    return response.content
+
+
+def markdown_to_text(markdown_string):
+    html=markdown.markdown(markdown_string)
+    soup = BeautifulSoup(html, 'html.parser')
+    text = soup.get_text()
+    return text
+
+
 @router.get("/todo-page")
 async def render_todo_page(request:Request, db:db_dependency):
     try:
@@ -84,15 +109,14 @@ async def read_by_id(user: user_dependency, db: db_dependency, todo_id: int = Pa
         return todo
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Todo not found")
 
-
 @router.post("/todo", status_code=status.HTTP_201_CREATED)
 async def create_todo(user:user_dependency, db: db_dependency, todo_request: TodoRequest):
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,)
     todo = Todo(**todo_request.dict(), owner_id=user.get('id'))
+    todo.description= create_todo_with_gemini(todo.description)
     db.add(todo)
     db.commit()
-
 
 @router.put("/todo/{todo_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def update_todo(user:user_dependency, db: db_dependency, todo_request: TodoRequest, todo_id: int = Path(gt=0)):
@@ -119,3 +143,7 @@ async def delete_todo(user:user_dependency, db: db_dependency, todo_id: int = Pa
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Todo not found")
     db.delete(todo)
     db.commit()
+
+
+if __name__ == "__main__":
+    print(create_todo_with_gemini("telefon alacağım"))
