@@ -79,7 +79,7 @@ async def render_add_todo_page(request:Request):
         if user is None:
             return redirect_to_login()
 
-        return templates.TemplateResponse("todo.html",{"request":request,"user":user})
+        return templates.TemplateResponse("add-todo.html",{"request":request,"user":user})
     except:
         return redirect_to_login()
 
@@ -110,13 +110,18 @@ async def read_by_id(user: user_dependency, db: db_dependency, todo_id: int = Pa
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Todo not found")
 
 @router.post("/todo", status_code=status.HTTP_201_CREATED)
-async def create_todo(user:user_dependency, db: db_dependency, todo_request: TodoRequest):
+async def create_todo(user: user_dependency,db: db_dependency, todo_request: TodoRequest):
     if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     todo = Todo(**todo_request.dict(), owner_id=user.get('id'))
-    todo.description= create_todo_with_gemini(todo.description)
+    todo.description = create_todo_with_gemini(todo.description)
     db.add(todo)
     db.commit()
+
+    print("🔍 Gemini çağrılıyor...")
+    todo.description = await create_todo_with_gemini(todo.description)
+    print(f"✅ Gemini sonucu: {todo.description}")
+
 
 @router.put("/todo/{todo_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def update_todo(user:user_dependency, db: db_dependency, todo_request: TodoRequest, todo_id: int = Path(gt=0)):
